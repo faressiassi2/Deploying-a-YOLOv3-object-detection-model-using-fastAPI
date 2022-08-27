@@ -1,7 +1,4 @@
-#!/usr/bin/env python
-# coding: utf-8
 
-# In[1]:
 
 
 import os
@@ -67,13 +64,6 @@ with open("clock2.jpg", "rb") as image_file:
     prediction = response_from_server(full_url, image_file)
 
 
-# In[7]:
-
-
-# Bonne nouvelle! La demande a été acceptée. Cependant, vous n'obtenez aucune information sur les objets de l'image.
-# Pour obtenir l'image avec les cadres de délimitation et les étiquettes, 
-# vous devez analyser le contenu de la réponse dans un format approprié. 
-# Ce processus ressemble beaucoup à la façon dont vous lisez des images brutes dans une image cv2 sur le serveur.
 #-------------------------------------------------------------------------------------------------------------------------------
 # Pour gérer cette étape, créons un répertoire appelé images_predicted pour enregistrer l'image dans :
 dir_name = "images_predicted"
