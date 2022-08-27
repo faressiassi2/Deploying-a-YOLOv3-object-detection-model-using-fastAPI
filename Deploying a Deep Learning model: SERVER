@@ -1,0 +1,144 @@
+# Object Detection with YOLOV3:
+pip install cvlib==0.2.6
+
+from IPython.display import Image, display
+# Some example images
+image_files = [
+    'apple.jpg',
+    'clock.jpg',
+    'oranges.jpg',
+    'car.jpg'
+]
+
+for image_file in image_files:
+    print(f"\nDisplaying image: {image_file}")
+    display(Image(filename=f"{image_file}"))
+    
+ 
+# Before using the object detection model, create a répertoire where you can store the resulting images:
+import os
+dir_name = "images_with_boxes"
+if not os.path.exists(dir_name):
+    os.mkdir(dir_name)
+ 
+ 
+import cv2
+import cvlib as cv
+from cvlib.object_detection import draw_bbox
+
+def detect_and_draw_box(filename, model="yolov3-tiny", confidence=0.5):
+    """Detects common objects on an image and creates a new image with bounding boxes.
+
+    Args:
+        filename (str): Filename of the image.
+        model (str): Either "yolov3" or "yolov3-tiny". Defaults to "yolov3-tiny".
+        confidence (float, optional): Desired confidence level. Defaults to 0.5.
+    """
+    
+    # Images are stored under the images/ directory
+    #img_filepath = f'{filename}'
+    #print( img_filepath)
+    
+    # Read the image into a numpy array
+    img = cv2.imread(filename)
+    #print(img)
+    
+    # Perform the object detection
+    bbox, label, conf = cv.detect_common_objects(img, confidence=confidence, model=model)
+    
+    # Print current image's filename
+    print(f"========================\nImage processed: {filename}\n")
+    
+    # Print detected objects with confidence level
+    for l, c in zip(label, conf):
+        print(f"Detected object: {l} with confidence level of {c}\n")
+    
+    # Create a new image that includes the bounding boxes
+    output_image = draw_bbox(img, bbox, label, conf)
+    
+    # Save the image in the directory images_with_boxes
+    cv2.imwrite(f'images_with_boxes/{filename}', output_image)
+    
+    # Display the image with bounding boxes
+    display(Image(f'images_with_boxes/{filename}'))
+    
+    
+for image_file in image_files:
+    detect_and_draw_box(image_file)
+    
+detect_and_draw_box("fruits.jpg")
+
+detect_and_draw_box("fruits.jpg", confidence=0.2)
+
+pip install uvicorn==0.16.0
+
+pip install nest-asyncio==1.5.4
+
+pip install fastapi==0.70.1
+
+pip install python-multipart==0.0.5
+
+import os
+import io
+import uvicorn
+import numpy as np
+import nest_asyncio
+from enum import Enum
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
+
+app = FastAPI(title='Deploying a ML Model with FastAPI')
+class Model(str, Enum):
+    yolov3tiny = "yolov3-tiny"
+    yolov3 = "yolov3"
+
+@app.get("/")
+def home():
+    return "Congratulations! Your API is working as expected. Now head over to http://localhost:8000/docs."
+
+@app.post("/predict") 
+def prediction(model: Model, file: UploadFile = File(...)):
+
+    # 1. VALIDATE INPUT FILE
+    filename = file.filename
+    fileExtension = filename.split(".")[-1] in ("jpg", "jpeg", "png")
+    if not fileExtension:
+        raise HTTPException(status_code=415, detail="Unsupported file provided.")
+    
+    # 2. TRANSFORMER L'IMAGE RAW EN image CV2
+    
+    # Read image as a stream of bytes(Lire l'image sous forme de flux d'octets)()
+    image_stream = io.BytesIO(file.file.read())
+    
+    # Start the stream from the beginning (position zero)(Démarrer le flux depuis le début (position zéro))
+    image_stream.seek(0)
+    
+    # Write the stream of bytes into a numpy array(Écrire le flux d'octets dans un tableau numpy)
+    file_bytes = np.asarray(bytearray(image_stream.read()), dtype=np.uint8)
+    
+    # Decode the numpy array as an image(Décode le tableau numpy comme une image)
+    image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+    
+    # 3. RUN OBJECT DETECTION MODEL
+    
+    # Run object detection
+    bbox, label, conf = cv.detect_common_objects(image, model=model)
+    
+    # Create image that includes bounding boxes and labels(Créer une image qui inclut des cadres de délimitation et des étiquettes)
+    output_image = draw_bbox(image, bbox, label, conf)
+    
+    # Save it in a folder within the server(Enregistrez-le dans un dossier sur le serveur)
+    cv2.imwrite(f'images_uploaded/{filename}', output_image)
+    
+    # 4. STREAM THE RESPONSE BACK TO THE CLIENT(TRANSMETTRE LA RÉPONSE AU CLIENT)
+    
+    # Open the saved image for reading in binary mode(Ouvrir l'image enregistrée pour la lire en mode binaire)
+    file_image = open(f'images_uploaded/{filename}', mode="rb")
+    
+    # Return the image as a stream specifying media type(Renvoie l'image sous forme de flux en spécifiant le type de média)
+    return StreamingResponse(file_image, media_type="image/jpeg")
+    
+
+nest_asyncio.apply()
+host = "0.0.0.0" if os.getenv("DOCKER-SETUP") else "127.0.0.1"
+uvicorn.run(app, host=host, port=8000)
